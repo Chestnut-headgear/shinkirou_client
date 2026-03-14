@@ -72,8 +72,8 @@ async def serverIP_send(line_with_IP):
     print("プロキシパンチで生成したIPアドレスをサーバーに通知しました、対戦相手を待っています")
 
 def sendtext(text):
-    #url = "https://shinkirou-server.onrender.com/echo"
-    url = "http://127.0.0.1:5000/echo"
+    url = "https://shinkirou-server.onrender.com/echo"
+    #$url = "http://127.0.0.1:5000/echo"
 
     payload = {'text':text}
 
