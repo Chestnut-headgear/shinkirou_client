@@ -26,29 +26,64 @@ async def check_host():
     await get_host_number()
     
 async def run_exe():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    #base_dir = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.dirname(sys.executable)
     exe_path = os.path.join(base_dir, "proxypunch.win64.exe")
+    print("Trying to run:", exe_path)
+    print("Exists:", os.path.exists(exe_path))
 
     process = await asyncio.create_subprocess_exec(
         exe_path,
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+        stderr=asyncio.subprocess.PIPE,
+        cwd=base_dir
     )
-    while True:
-        line = await process.stdout.readline()
-        if not line:
-            break
-        decoded_line = line.decode().rstrip()
-        print("stdout:", decoded_line)
+    # stderr reader (prevents pipe issues)
+    async def read_stderr():
+        try:
+            while True:
+                line = await process.stderr.readline()
+                if not line:
+                    break
+                print("stderr:", line.decode().rstrip())
+        except Exception:
+            pass
 
-        # 特定の文字列が出たら関数呼び出し
-        if "Ask your peer to connect to " in decoded_line:
-            await serverIP_send(decoded_line)
-        elif "Host? " in decoded_line:
-            await serverIP_get()
+    stderr_task = asyncio.create_task(read_stderr())
 
-    return_code = await process.wait()
-    print("終了コード:", return_code)
+    try:
+        while True:
+            line = await process.stdout.readline()
+            if not line:
+                break
+
+            decoded_line = line.decode(errors="ignore").rstrip()
+            print("stdout:", decoded_line)
+
+            # 特定の文字列が出たら関数呼び出し
+            if "Ask your peer to connect to " in decoded_line:
+                await serverIP_send(decoded_line)
+
+            elif "Host? " in decoded_line:
+                await serverIP_get()
+
+    except (asyncio.CancelledError, ValueError):
+        pass
+
+    finally:
+        # wait for process
+        return_code = await process.wait()
+
+        # ensure stderr finished
+        await stderr_task
+
+        # close pipes safely
+        if process.stdout:
+            process.stdout.close()
+        if process.stderr:
+            process.stderr.close()
+
+        print("終了コード:", return_code)
 
 
 async def get_host_number():
