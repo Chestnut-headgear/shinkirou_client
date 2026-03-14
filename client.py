@@ -3,10 +3,27 @@ import subprocess
 import asyncio
 import os
 import time
+import re
+import pyperclip
+import sys
+
+
+def getIPaddress(input):
+    #sample stdout: Connected. Ask your peer to connect to 219.123.149.209 on port 10800 with proxypunch
+
+    ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
+
+    matches = re.findall(ip_pattern, input)
+    match = matches[0]
+
+    return match 
 
 async def main():
+    await check_host()
     await run_exe()
     
+async def check_host():
+    await get_host_number()
     
 async def run_exe():
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -17,8 +34,6 @@ async def run_exe():
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE
     )
-
-    # 標準出力を1行ずつ監視
     while True:
         line = await process.stdout.readline()
         if not line:
@@ -28,24 +43,37 @@ async def run_exe():
 
         # 特定の文字列が出たら関数呼び出し
         if "Ask your peer to connect to " in decoded_line:
-            await on_ready()
-
-    # 標準エラーも読み取り（必要なら）
-    err = await process.stderr.read()
-    if err:
-        print("stderr:", err.decode().rstrip())
+            await serverIP_send(decoded_line)
+        elif "Host? " in decoded_line:
+            await serverIP_get()
 
     return_code = await process.wait()
     print("終了コード:", return_code)
 
-# 条件が満たされたとき呼ばれる関数
-async def on_ready():
-    print("READY が出力されました！別処理を実行します。")
+
+async def get_host_number():
+    respond = sendtext("ホストの数よこせ")
+    print(respond)
+
+
+async def serverIP_get():
+    respond = sendtext("IPよこせ")
+    print(respond)
+    opponent = respond.replace("opponent:", "")
+    pyperclip.copy(opponent) 
+
+
+async def serverIP_send(line_with_IP):
+    ipaddress = getIPaddress(line_with_IP)
+    ipaddress = ipaddress + ":10800"
+    print(ipaddress)
     # 例：HTTPリクエストを送る
-    # await sendtext("READYが出ました")
+    sendtext(ipaddress)
+    print("プロキシパンチで生成したIPアドレスをサーバーに通知しました、対戦相手を待っています")
 
 def sendtext(text):
-    url = "https://shinkirou-server.onrender.com/echo"
+    #url = "https://shinkirou-server.onrender.com/echo"
+    url = "http://127.0.0.1:5000/echo"
 
     payload = {'text':text}
 
@@ -54,8 +82,10 @@ def sendtext(text):
     if response.status_code == 200:
         data = response.json()
         print("response:",data['response'])
+        return data['response']
     else:
         print("fuck")
+        sys.exit()
 
 if __name__ == "__main__":
     asyncio.run(main())
